@@ -1,0 +1,30 @@
+{
+  "name": "anchorly",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "prepare": "husky",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "eslint": "^9.0.0",
+    "husky": "^9.0.0",
+    "lint-staged": "^15.0.0",
+    "prettier": "^3.0.0",
+    "typescript": "^5.0.0",
+    "typescript-eslint": "^8.0.0"
+  },
+  "lint-staged": {
+    "*.{js,ts,tsx,json,md}": [
+      "prettier --write",
+      "eslint --fix"
+    ]
+  }
+}
