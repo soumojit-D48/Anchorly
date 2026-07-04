@@ -1,0 +1,161 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CheckName {
+  TESTS
+  SIZE
+  STYLE
+  DESCRIPTION
+}
+
+enum BadgeType {
+  FIRST_PR
+  TEN_PRS
+  FIFTY_PRS
+  MOST_IMPROVED
+}
+
+enum ReactionType {
+  THUMBS_UP
+  THUMBS_DOWN
+}
+
+model Maintainer {
+  id            String         @id @default(cuid())
+  githubId      Int            @unique
+  username      String
+  email         String?
+  avatarUrl     String?
+  createdAt     DateTime       @default(now())
+  installations Installation[]
+}
+
+model Installation {
+  id                    String     @id @default(cuid())
+  githubInstallationId  Int        @unique
+  maintainerId          String
+  maintainer            Maintainer @relation(fields: [maintainerId], references: [id])
+  createdAt             DateTime   @default(now())
+  repos                 Repo[]
+}
+
+model Repo {
+  id              String        @id @default(cuid())
+  githubRepoId    Int           @unique
+  installationId  String
+  installation    Installation  @relation(fields: [installationId], references: [id])
+  owner           String
+  name            String
+  fullName        String        @unique
+  createdAt       DateTime      @default(now())
+
+  settings        RepoSettings?
+  contributors    Contributor[]
+  pullRequests    PullRequest[]
+}
+
+model RepoSettings {
+  id                       String   @id @default(cuid())
+  repoId                   String   @unique
+  repo                     Repo     @relation(fields: [repoId], references: [id])
+  testsCheckEnabled        Boolean  @default(true)
+  sizeCheckEnabled         Boolean  @default(true)
+  styleCheckEnabled        Boolean  @default(true)
+  descriptionCheckEnabled  Boolean  @default(true)
+  maxDiffLines             Int      @default(500)
+  goodFirstIssueLabel      String?
+  veteranPrThreshold       Int      @default(10)
+  updatedAt                DateTime @updatedAt
+}
+
+model Contributor {
+  id            String        @id @default(cuid())
+  repoId        String
+  repo          Repo          @relation(fields: [repoId], references: [id])
+  githubUserId  Int
+  username      String
+  avatarUrl     String?
+  totalPrs      Int           @default(0)
+  firstSeenAt   DateTime      @default(now())
+  lastSeenAt    DateTime      @default(now())
+
+  pullRequests  PullRequest[]
+  reviews       Review[]
+  badges        Badge[]
+
+  @@unique([repoId, githubUserId])
+}
+
+model PullRequest {
+  id              String       @id @default(cuid())
+  repoId          String
+  repo            Repo         @relation(fields: [repoId], references: [id])
+  contributorId   String
+  contributor     Contributor  @relation(fields: [contributorId], references: [id])
+  githubPrNumber  Int
+  title           String
+  state           String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  reviews         Review[]
+
+  @@unique([repoId, githubPrNumber])
+}
+
+model Review {
+  id              String        @id @default(cuid())
+  pullRequestId   String
+  pullRequest     PullRequest   @relation(fields: [pullRequestId], references: [id])
+  contributorId   String
+  contributor     Contributor   @relation(fields: [contributorId], references: [id])
+  triggerEvent    String
+  commented       Boolean       @default(false)
+  commentBody     String?
+  aiUsed          Boolean       @default(false)
+  isMilestone     Boolean       @default(false)
+  createdAt       DateTime      @default(now())
+
+  checkResults    CheckResult[]
+  reactions       Reaction[]
+}
+
+model CheckResult {
+  id         String    @id @default(cuid())
+  reviewId   String
+  review     Review    @relation(fields: [reviewId], references: [id])
+  checkName  CheckName
+  passed     Boolean
+  message    String?
+}
+
+model Badge {
+  id             String      @id @default(cuid())
+  contributorId  String
+  contributor    Contributor @relation(fields: [contributorId], references: [id])
+  type           BadgeType
+  awardedAt      DateTime    @default(now())
+
+  @@unique([contributorId, type])
+}
+
+model Reaction {
+  id         String       @id @default(cuid())
+  reviewId   String
+  review     Review       @relation(fields: [reviewId], references: [id])
+  type       ReactionType
+  createdAt  DateTime     @default(now())
+}
+
+model WebhookDelivery {
+  id           String   @id @default(cuid())
+  deliveryId   String   @unique
+  eventType    String
+  processedAt  DateTime @default(now())
+}
