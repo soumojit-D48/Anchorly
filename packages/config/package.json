@@ -4,8 +4,13 @@
   "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./env": "./src/env.ts"
+  },
   "dependencies": {
-    "@anchorly/shared": "workspace:*"
+    "@anchorly/shared": "workspace:*",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
