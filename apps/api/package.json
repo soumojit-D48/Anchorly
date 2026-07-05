@@ -9,9 +9,11 @@
   "dependencies": {
     "@anchorly/db": "workspace:*",
     "@anchorly/config": "workspace:*",
-    "@anchorly/shared": "workspace:*"
+    "@anchorly/shared": "workspace:*",
+    "express": "^4.21.0"
   },
   "devDependencies": {
+    "@types/express": "^4.17.0",
     "typescript": "^5.0.0"
   }
 }
