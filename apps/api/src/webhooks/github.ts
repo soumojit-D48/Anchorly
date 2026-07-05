@@ -101,7 +101,10 @@ async function handleInstallation(payload: Record<string, unknown>): Promise<voi
     for (const repo of repos) {
       const fullName = repo.full_name as string;
       const owner = fullName.split('/')[0];
-      await prisma.repo.upsert({
+      const existing = await prisma.repo.findUnique({
+        where: { githubRepoId: repo.id as number },
+      });
+      const repoRecord = await prisma.repo.upsert({
         where: { githubRepoId: repo.id as number },
         update: {
           installationId: inst.id,
@@ -117,6 +120,12 @@ async function handleInstallation(payload: Record<string, unknown>): Promise<voi
           fullName,
         },
       });
+      if (!existing) {
+        await prisma.repoSettings.create({
+          data: { repoId: repoRecord.id },
+        });
+        logger.info({ repoId: repoRecord.id, fullName }, 'Default RepoSettings created');
+      }
     }
   }
 
@@ -141,7 +150,10 @@ async function handleInstallationRepositories(payload: Record<string, unknown>):
     for (const repo of added) {
       const fullName = repo.full_name as string;
       const owner = fullName.split('/')[0];
-      await prisma.repo.upsert({
+      const existing = await prisma.repo.findUnique({
+        where: { githubRepoId: repo.id as number },
+      });
+      const repoRecord = await prisma.repo.upsert({
         where: { githubRepoId: repo.id as number },
         update: {
           installationId: inst.id,
@@ -157,6 +169,12 @@ async function handleInstallationRepositories(payload: Record<string, unknown>):
           fullName,
         },
       });
+      if (!existing) {
+        await prisma.repoSettings.create({
+          data: { repoId: repoRecord.id },
+        });
+        logger.info({ repoId: repoRecord.id, fullName }, 'Default RepoSettings created');
+      }
     }
   }
 

@@ -3,6 +3,7 @@ import { logger } from '@anchorly/shared/logger';
 import { prisma } from '@anchorly/db';
 import { validateEnv } from '@anchorly/config/env';
 import { router as webhookRouter } from './webhooks/github';
+import { router as installRouter } from './routes/install';
 
 validateEnv();
 
@@ -13,6 +14,7 @@ app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
+app.use('/api', installRouter);
 app.use('/api/webhooks', webhookRouter);
 
 app.listen(port, () => {
