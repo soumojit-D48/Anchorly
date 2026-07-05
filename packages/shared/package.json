@@ -12,7 +12,8 @@
   "scripts": {},
   "dependencies": {
     "pino": "^9.0.0",
-    "pino-pretty": "^13.0.0"
+    "pino-pretty": "^13.0.0",
+    "pino-roll": "^1.0.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
