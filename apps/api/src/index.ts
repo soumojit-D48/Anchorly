@@ -2,7 +2,7 @@ import express from 'express';
 import { logger } from '@anchorly/shared/logger';
 import { prisma } from '@anchorly/db';
 import { validateEnv } from '@anchorly/config/env';
-import { router as webhookRouter } from './webhooks/github';
+import { router as webhookRouter, queue } from './webhooks/github';
 import { router as installRouter } from './routes/install';
 
 validateEnv();
@@ -22,11 +22,15 @@ app.listen(port, () => {
 });
 
 process.on('SIGINT', async () => {
+  logger.info('SIGINT received, shutting down');
+  await queue.close();
   await prisma.$disconnect();
   process.exit(0);
 });
 
 process.on('SIGTERM', async () => {
+  logger.info('SIGTERM received, shutting down');
+  await queue.close();
   await prisma.$disconnect();
   process.exit(0);
 });

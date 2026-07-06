@@ -3,9 +3,12 @@ import type { Router as RouterType } from 'express';
 import express from 'express';
 import { prisma } from '@anchorly/db';
 import { logger } from '@anchorly/shared/logger';
+import { createPrReviewQueue } from '@anchorly/shared/queue';
 import { hmacVerify } from '../middleware/hmac-verify';
 
 const router: RouterType = Router();
+
+const queue = createPrReviewQueue(process.env.REDIS_URL!);
 
 router.post('/github', express.raw({ type: 'application/json' }), hmacVerify, async (req, res) => {
   const rawBody = req.body as Buffer;
@@ -192,11 +195,27 @@ async function handlePullRequest(
   const pr = payload.pull_request as Record<string, unknown>;
   const repo = payload.repository as Record<string, unknown>;
   const sender = payload.sender as Record<string, unknown>;
+  const installation = payload.installation as Record<string, unknown>;
 
   logger.info(
     { deliveryId, action, prNumber: pr.number, repo: repo.full_name, sender: sender.login },
-    'Pull request event received',
+    'Pull request event received, enqueueing job',
   );
+
+  await queue.add(
+    'review',
+    {
+      prNumber: pr.number as number,
+      repoFullName: repo.full_name as string,
+      senderLogin: sender.login as string,
+      senderId: sender.id as number,
+      action,
+      installationId: installation.id as number,
+    },
+    { jobId: deliveryId },
+  );
+
+  logger.info({ deliveryId, prNumber: pr.number }, 'Job enqueued');
 }
 
-export { router };
+export { router, queue };
