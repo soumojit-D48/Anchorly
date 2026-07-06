@@ -9,7 +9,8 @@
   "dependencies": {
     "@anchorly/db": "workspace:*",
     "@anchorly/config": "workspace:*",
-    "@anchorly/shared": "workspace:*"
+    "@anchorly/shared": "workspace:*",
+    "bullmq": "^5.0.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0"
