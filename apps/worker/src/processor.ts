@@ -1,9 +1,13 @@
 import { prisma } from '@anchorly/db';
 import { logger } from '@anchorly/shared/logger';
 import type { PrReviewJobData } from '@anchorly/shared/queue';
+import type { Job } from 'bullmq';
+import { createGitHubClient } from './github/client';
+import { fetchPrData } from './github/fetch-pr';
+import { runChecks } from './checks/run-checks';
 
-export async function processPrReviewJob(job: { data: PrReviewJobData }): Promise<void> {
-  const { prNumber, repoFullName, senderLogin, senderId, action } = job.data;
+export async function processPrReviewJob(job: Job<PrReviewJobData>): Promise<void> {
+  const { prNumber, repoFullName, senderLogin, senderId, action, installationId } = job.data;
 
   logger.info(
     { jobId: job.id, prNumber, repoFullName, senderLogin, action },
@@ -12,11 +16,17 @@ export async function processPrReviewJob(job: { data: PrReviewJobData }): Promis
 
   const repo = await prisma.repo.findUnique({
     where: { fullName: repoFullName },
+    include: { settings: true },
   });
 
   if (!repo) {
     logger.error({ repoFullName }, 'Repo not found — was the installation event processed?');
     throw new Error(`Repo not found: ${repoFullName}`);
+  }
+
+  if (!repo.settings) {
+    logger.error({ repoFullName }, 'RepoSettings not found for repo');
+    throw new Error(`RepoSettings not found for repo: ${repoFullName}`);
   }
 
   const contributor = await prisma.contributor.upsert({
@@ -67,15 +77,53 @@ export async function processPrReviewJob(job: { data: PrReviewJobData }): Promis
     );
   }
 
+  const review = await prisma.review.create({
+    data: {
+      pullRequestId: pullRequest.id,
+      contributorId: contributor.id,
+      triggerEvent: action,
+    },
+  });
+
+  logger.info({ reviewId: review.id }, 'Review record created');
+
+  const octokit = await createGitHubClient(installationId);
+  const prData = await fetchPrData(octokit, repo.owner, repo.name, prNumber);
+
   logger.info(
     {
-      jobId: job.id,
-      prNumber,
-      repoId: repo.id,
-      contributorId: contributor.id,
-      pullRequestId: pullRequest.id,
-      action,
+      reviewId: review.id,
+      files: prData.files.length,
+      additions: prData.totalAdditions,
+      deletions: prData.totalDeletions,
     },
-    'PR review job completed',
+    'PR data fetched',
   );
+
+  const checkResults = runChecks(prData, repo.settings);
+
+  for (const result of checkResults) {
+    await prisma.checkResult.create({
+      data: {
+        reviewId: review.id,
+        checkName: result.checkName,
+        passed: result.passed,
+        message: result.message,
+      },
+    });
+  }
+
+  const failedChecks = checkResults.filter((r) => !r.passed);
+  logger.info(
+    {
+      reviewId: review.id,
+      totalChecks: checkResults.length,
+      passed: checkResults.filter((r) => r.passed).length,
+      failed: failedChecks.length,
+      failedChecks: failedChecks.map((r) => r.checkName),
+    },
+    'Checks completed and persisted',
+  );
+
+  logger.info({ jobId: job.id, prNumber, reviewId: review.id, action }, 'PR review job completed');
 }
