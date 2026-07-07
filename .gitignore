@@ -1,6 +1,7 @@
 *.md
 
 !README.md
+!apps/worker/src/ai/prompts/*.md
 
 # =========================
 # Dependencies
