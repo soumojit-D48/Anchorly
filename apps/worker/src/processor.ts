@@ -5,6 +5,7 @@ import type { Job } from 'bullmq';
 import { createGitHubClient } from './github/client';
 import { fetchPrData } from './github/fetch-pr';
 import { runChecks } from './checks/run-checks';
+import { generateComment } from './ai/generate-comment';
 
 export async function processPrReviewJob(job: Job<PrReviewJobData>): Promise<void> {
   const { prNumber, repoFullName, senderLogin, senderId, action, installationId } = job.data;
@@ -123,6 +124,38 @@ export async function processPrReviewJob(job: Job<PrReviewJobData>): Promise<voi
       failedChecks: failedChecks.map((r) => r.checkName),
     },
     'Checks completed and persisted',
+  );
+
+  const commentBody = await generateComment({
+    checkResults: checkResults.map((r) => ({
+      checkName: r.checkName,
+      passed: r.passed,
+      message: r.message,
+    })),
+    prTitle: prData.title,
+    prBody: prData.body,
+    filesChanged: prData.changedFiles,
+    totalAdditions: prData.totalAdditions,
+    totalDeletions: prData.totalDeletions,
+    contributor: {
+      totalPrs: contributor.totalPrs,
+      username: contributor.username,
+    },
+  });
+
+  const aiUsed = commentBody !== null;
+
+  await prisma.review.update({
+    where: { id: review.id },
+    data: {
+      aiUsed,
+      commentBody,
+    },
+  });
+
+  logger.info(
+    { reviewId: review.id, aiUsed, commentLength: commentBody?.length ?? 0 },
+    'AI comment generated and stored',
   );
 
   logger.info({ jobId: job.id, prNumber, reviewId: review.id, action }, 'PR review job completed');
