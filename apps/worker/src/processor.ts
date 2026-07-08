@@ -8,6 +8,7 @@ import { postComment } from './github/post-comment';
 import { runChecks } from './checks/run-checks';
 import { generateComment } from './ai/generate-comment';
 import { makeAdaptiveDecision } from './adaptive';
+import { awardBadges } from './badges';
 
 export async function processPrReviewJob(job: Job<PrReviewJobData>): Promise<void> {
   const { prNumber, repoFullName, senderLogin, senderId, action, installationId } = job.data;
@@ -79,6 +80,9 @@ export async function processPrReviewJob(job: Job<PrReviewJobData>): Promise<voi
       'Contributor PR count incremented',
     );
   }
+
+  const updatedTotalPrs = action === 'opened' ? contributor.totalPrs + 1 : contributor.totalPrs;
+  await awardBadges(contributor.id, updatedTotalPrs);
 
   const review = await prisma.review.create({
     data: {
