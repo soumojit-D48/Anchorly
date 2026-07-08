@@ -11,6 +11,7 @@ const envSchema = z.object({
   GITHUB_OAUTH_CLIENT_SECRET: z.string().min(1),
   OPENROUTER_API_KEY: z.string().min(1),
   OPENROUTER_MODEL: z.string().min(1),
+  SESSION_SECRET: z.string().min(1),
 });
 
 export function validateEnv(): void {
