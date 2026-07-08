@@ -4,8 +4,10 @@ import type { PrReviewJobData } from '@anchorly/shared/queue';
 import type { Job } from 'bullmq';
 import { createGitHubClient } from './github/client';
 import { fetchPrData } from './github/fetch-pr';
+import { postComment } from './github/post-comment';
 import { runChecks } from './checks/run-checks';
 import { generateComment } from './ai/generate-comment';
+import { makeAdaptiveDecision } from './adaptive';
 
 export async function processPrReviewJob(job: Job<PrReviewJobData>): Promise<void> {
   const { prNumber, repoFullName, senderLogin, senderId, action, installationId } = job.data;
@@ -126,37 +128,81 @@ export async function processPrReviewJob(job: Job<PrReviewJobData>): Promise<voi
     'Checks completed and persisted',
   );
 
-  const commentBody = await generateComment({
-    checkResults: checkResults.map((r) => ({
-      checkName: r.checkName,
-      passed: r.passed,
-      message: r.message,
-    })),
-    prTitle: prData.title,
-    prBody: prData.body,
-    filesChanged: prData.changedFiles,
-    totalAdditions: prData.totalAdditions,
-    totalDeletions: prData.totalDeletions,
-    contributor: {
-      totalPrs: contributor.totalPrs,
-      username: contributor.username,
-    },
+  const decision = makeAdaptiveDecision({
+    totalPrs: action === 'opened' ? contributor.totalPrs + 1 : contributor.totalPrs,
+    veteranPrThreshold: repo.settings.veteranPrThreshold,
+    failedCheckNames: failedChecks.map((r) => r.checkName),
   });
 
-  const aiUsed = commentBody !== null;
+  let commentBody: string | null = null;
+  let aiUsed = false;
+
+  if (decision.shouldUseAI) {
+    commentBody = await generateComment({
+      checkResults: checkResults.map((r) => ({
+        checkName: r.checkName,
+        passed: r.passed,
+        message: r.message,
+      })),
+      prTitle: prData.title,
+      prBody: prData.body,
+      filesChanged: prData.changedFiles,
+      totalAdditions: prData.totalAdditions,
+      totalDeletions: prData.totalDeletions,
+      contributor: {
+        totalPrs: action === 'opened' ? contributor.totalPrs + 1 : contributor.totalPrs,
+        username: contributor.username,
+      },
+    });
+    aiUsed = commentBody !== null;
+  }
 
   await prisma.review.update({
     where: { id: review.id },
     data: {
       aiUsed,
       commentBody,
+      isMilestone: decision.isMilestone,
     },
   });
 
   logger.info(
-    { reviewId: review.id, aiUsed, commentLength: commentBody?.length ?? 0 },
-    'AI comment generated and stored',
+    {
+      reviewId: review.id,
+      shouldComment: decision.shouldComment,
+      shouldUseAI: decision.shouldUseAI,
+      isMilestone: decision.isMilestone,
+      aiUsed,
+      commentLength: commentBody?.length ?? 0,
+    },
+    'Adaptive decision applied and review updated',
   );
+
+  if (decision.shouldComment && commentBody) {
+    const commentId = await postComment({
+      octokit,
+      owner: repo.owner,
+      repo: repo.name,
+      prNumber,
+      body: commentBody,
+    });
+
+    if (commentId !== null) {
+      await prisma.review.update({
+        where: { id: review.id },
+        data: { commented: true },
+      });
+      logger.info(
+        { reviewId: review.id, commentId },
+        'Comment posted and review marked as commented',
+      );
+    }
+  } else {
+    logger.info(
+      { reviewId: review.id, shouldComment: decision.shouldComment },
+      'No comment posted',
+    );
+  }
 
   logger.info({ jobId: job.id, prNumber, reviewId: review.id, action }, 'PR review job completed');
 }
