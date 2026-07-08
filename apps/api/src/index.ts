@@ -1,20 +1,27 @@
 import express from 'express';
+import cookieParser from 'cookie-parser';
 import { logger } from '@anchorly/shared/logger';
 import { prisma } from '@anchorly/db';
 import { validateEnv } from '@anchorly/config/env';
+import { createSessionMiddleware } from './middleware/session';
+import { dashboardRateLimit } from './middleware/rate-limit';
 import { router as webhookRouter, queue } from './webhooks/github';
-import { router as installRouter } from './routes/install';
+import { router as authRouter } from './routes/auth';
 
 validateEnv();
 
 const app = express();
 const port = parseInt(process.env.PORT ?? '3000', 10);
 
+app.use(cookieParser());
+app.use(createSessionMiddleware());
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.use('/api', installRouter);
+app.use('/api', authRouter);
+app.use('/api/dashboard', dashboardRateLimit);
 app.use('/api/webhooks', webhookRouter);
 
 app.listen(port, () => {
