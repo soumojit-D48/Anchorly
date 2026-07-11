@@ -6,4 +6,6 @@ export const dashboardRateLimit = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Too many requests, please try again later' },
+  // Skip X-Forwarded-For validation when behind a proxy
+  validate: { xForwardedForHeader: false },
 });
