@@ -29,13 +29,17 @@ app.use(
   }),
 );
 
-app.use(express.json());
 app.use(cookieParser());
 app.use(createSessionMiddleware());
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok' });
 });
+
+// Webhook needs raw body for HMAC — register BEFORE express.json()
+app.use('/api/webhooks', express.raw({ type: 'application/json' }));
+
+app.use(express.json());
 
 app.use('/api', authRouter);
 app.use('/api/dashboard', dashboardRateLimit);

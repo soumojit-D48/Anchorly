@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import type { Router as RouterType } from 'express';
-import express from 'express';
 import { prisma } from '@anchorly/db';
 import { logger } from '@anchorly/shared/logger';
 import { createPrReviewQueue } from '@anchorly/shared/queue';
@@ -10,7 +9,8 @@ const router: RouterType = Router();
 
 const queue = createPrReviewQueue(process.env.REDIS_URL!);
 
-router.post('/github', express.raw({ type: 'application/json' }), hmacVerify, async (req, res) => {
+router.post('/github', hmacVerify, async (req, res) => {
+  logger.info({ deliveryId: req.headers['x-github-delivery'] }, 'Webhook hit received');
   const rawBody = req.body as Buffer;
   const deliveryId = req.headers['x-github-delivery'] as string;
   const eventType = req.headers['x-github-event'] as string;
